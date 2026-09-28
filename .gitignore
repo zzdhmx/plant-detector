@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.matplotlib/
+work_mplcache/
+
+# 检测结果里的标注图、掩膜、三联图随时可以重新生成，不入库；
+# 只保留体积小、又能证明结果的汇总图和 JSON 报告。
+results/*
+!results/summary_board.png
+!results/summary.csv
+!results/*_report.json

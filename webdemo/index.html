@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>植物检测 · 浏览器演示</title>
+<style>
+  :root {
+    --bg: #0f1512;
+    --card: #18211c;
+    --card2: #1e2922;
+    --line: #2c3a31;
+    --text: #e8f0ea;
+    --muted: #97a89d;
+    --green: #4fd07a;
+    --yellow: #e8c445;
+    --red: #ef6b5e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: radial-gradient(1200px 600px at 20% -10%, #1b2a22, var(--bg));
+    color: var(--text);
+    font: 14px/1.6 "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  }
+  header {
+    padding: 26px 28px 10px;
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+  h1 { margin: 0 0 6px; font-size: 22px; letter-spacing: .5px; }
+  header p { margin: 0; color: var(--muted); }
+  main {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 16px 28px 40px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 380px;
+    gap: 20px;
+  }
+  @media (max-width: 980px) { main { grid-template-columns: minmax(0, 1fr); } }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px;
+  }
+  .stage { display: flex; flex-direction: column; gap: 12px; }
+  .canvas-wrap {
+    position: relative;
+    background: #0b100d;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    min-height: 320px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  canvas { max-width: 100%; height: auto; display: block; }
+  #drop {
+    text-align: center;
+    color: var(--muted);
+    padding: 60px 20px;
+    cursor: pointer;
+    border: 1px dashed #3a5044;
+    border-radius: 10px;
+    margin: 14px;
+    width: 100%;
+    transition: .15s;
+  }
+  #drop.hot { border-color: var(--green); color: var(--green); background: #14231a; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  button {
+    background: var(--card2);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: .15s;
+  }
+  button:hover { border-color: var(--green); color: var(--green); }
+  button.primary { background: #1e3a29; border-color: #2f6b45; color: #b8f0cd; }
+  .panel { display: flex; flex-direction: column; gap: 14px; }
+  .panel h2 { font-size: 14px; margin: 0 0 10px; color: var(--green); font-weight: 600; }
+  .slider { margin-bottom: 10px; }
+  .slider label { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+  input[type=range] { width: 100%; accent-color: var(--green); }
+  .switches { display: flex; flex-wrap: wrap; gap: 12px; font-size: 13px; color: var(--muted); }
+  .switches label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+  .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .stat {
+    background: var(--card2);
+    border-radius: 10px;
+    padding: 9px 11px;
+    border: 1px solid #24332a;
+  }
+  .stat b { display: block; font-size: 19px; font-weight: 700; }
+  .stat span { font-size: 11px; color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { padding: 6px 4px; text-align: right; border-bottom: 1px solid #24332a; }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 500; }
+  .tag { padding: 1px 7px; border-radius: 20px; font-size: 11px; white-space: nowrap; }
+  .tag.ok { background: #1d3a27; color: #7ce09f; }
+  .tag.warn { background: #3c3618; color: #ecd06a; }
+  .tag.bad { background: #3d2119; color: #f0928a; }
+  footer { max-width: 1280px; margin: 0 auto; padding: 0 28px 30px; color: var(--muted); font-size: 12px; }
+  code { background: #1c2620; padding: 1px 5px; border-radius: 5px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>植物检测 · 浏览器演示</h1>
+  <p>纯前端实现：超绿指数 ExG + Otsu 自动阈值 + HSV 颜色区间 + 连通域分析 → 植株计数与叶片健康评估。图片只在你的浏览器里处理，不会上传。</p>
+</header>
+
+<main>
+  <section class="stage">
+    <div class="card canvas-wrap">
+      <div id="drop">拖拽一张植物照片到这里<br /><small>或点击选择本地图片</small></div>
+      <canvas id="view" hidden></canvas>
+    </div>
+    <div class="card row">
+      <button id="btn-sample" class="primary">载入示例：健康植株</button>
+      <button id="btn-seedlings">示例：多株幼苗</button>
+      <button id="btn-disease">示例：病害植株</button>
+      <button id="btn-empty">示例：无植物</button>
+      <button id="btn-save">保存结果图</button>
+      <span id="timing" style="color:var(--muted);font-size:12px"></span>
+    </div>
+    <div class="card">
+      <h2>区域明细</h2>
+      <table id="regions">
+        <thead>
+          <tr><th>区域</th><th>位置</th><th>面积占比</th><th>绿色</th><th>黄化</th><th>病斑</th><th>健康分</th><th>判定</th></tr>
+        </thead>
+        <tbody><tr><td colspan="8" style="color:var(--muted)">等待检测……</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <div class="card">
+      <h2>检测结果</h2>
+      <div class="stats">
+        <div class="stat"><b id="s-coverage">--</b><span>植被覆盖度</span></div>
+        <div class="stat"><b id="s-count">--</b><span>估计植株数</span></div>
+        <div class="stat"><b id="s-health">--</b><span>总体健康分</span></div>
+        <div class="stat"><b id="s-spots">--</b><span>疑似病斑</span></div>
+        <div class="stat"><b id="s-yellow">--</b><span>黄化占比</span></div>
+        <div class="stat"><b id="s-regions">--</b><span>连通区域数</span></div>
+      </div>
+      <p id="s-verdict" style="margin:12px 0 0;color:var(--muted);font-size:13px">等待检测……</p>
+    </div>
+
+    <div class="card">
+      <h2>分割参数（可实时微调）</h2>
+      <div class="slider">
+        <label><span>绿色 H 下限</span><span id="v-hue-min">25</span></label>
+        <input type="range" id="hue-min" min="0" max="60" value="25" />
+      </div>
+      <div class="slider">
+        <label><span>绿色 H 上限</span><span id="v-hue-max">95</span></label>
+        <input type="range" id="hue-max" min="60" max="179" value="95" />
+      </div>
+      <div class="slider">
+        <label><span>饱和度下限</span><span id="v-sat-min">40</span></label>
+        <input type="range" id="sat-min" min="0" max="150" value="40" />
+      </div>
+      <div class="slider">
+        <label><span>亮度下限</span><span id="v-val-min">30</span></label>
+        <input type="range" id="val-min" min="0" max="150" value="30" />
+      </div>
+      <div class="slider">
+        <label><span>ExG 阈值微调（正数更严格）</span><span id="v-exg-bias">0</span></label>
+        <input type="range" id="exg-bias" min="-25" max="25" value="0" />
+      </div>
+      <div class="slider">
+        <label><span>碎块过滤（整图面积占比）</span><span id="v-min-area">0.05%</span></label>
+        <input type="range" id="min-area" min="1" max="200" value="5" />
+      </div>
+      <div class="switches">
+        <label><input type="checkbox" id="show-mask" checked /> 叠加掩膜</label>
+        <label><input type="checkbox" id="show-boxes" checked /> 显示方框</label>
+        <label><input type="checkbox" id="mask-only" /> 只看掩膜</label>
+        <label><input type="checkbox" id="accept-yellow" checked /> 接纳相接黄叶</label>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<footer>
+  算法与 Python 版一致：ExG = 2g - r - b（色度归一化）→ Otsu 自动阈值 → HSV 绿色区间 → 形态学清理 → 连通域统计。
+  黄叶单独放宽颜色阈值，但只接纳与绿色主体相接的整片黄叶，避免把土块和枯枝误检成植物。
+  已知局限：贴在一起的植株会被算作一个区域。想看命令行版本请回到 <code>python -m plantdet -i 图片</code>。
+</footer>
+
+<script>
+"use strict";
+
+/* ---------------- 参数 ---------------- */
+const CFG = {
+  hueMin: 25, hueMax: 95, satMin: 40, valMin: 30,
+  yellowHueMin: 12, yellowHueMax: 25, yellowSatMin: 60, yellowValMin: 60,
+  yellowConnect: 15, exgBias: 0, minAreaRatio: 0.0005,
+  // 分析阶段（与 Python 版 AnalyzeConfig 对应）
+  aGreenHueMin: 30, aGreenHueMax: 95, aGreenSatMin: 50, aGreenValMin: 40,
+  aYellowHueMin: 12, aYellowHueMax: 30, aYellowSatMin: 60, aYellowValMin: 80,
+  spotValMax: 110, spotMinAreaRatio: 0.0004, notableRatio: 0.02,
+  showMask: true, showBoxes: true, maskOnly: false, acceptYellow: true, alpha: 0.38
+};
+
+const view = document.getElementById("view");
+const ctx = view.getContext("2d", { willReadFrequently: true });
+const drop = document.getElementById("drop");
+let sourceImage = null;      // 当前分析用的 ImageData（原始尺寸）
+let drawState = null;        // 最近一次分析结果，用于重绘
+
+/* ---------------- 工具 ---------------- */
+function labelComponents(mask, w, h) {
+  const n = w * h;
+  const labels = new Int32Array(n);
+  const stats = [null];
+  const stack = new Int32Array(n);
+  let next = 0;
+  for (let i = 0; i < n; i++) {
+    if (!mask[i] || labels[i]) continue;
+    next++;
+    let sp = 0;
+    stack[sp++] = i;
+    labels[i] = next;
+    let area = 0, minx = w, miny = h, maxx = -1, maxy = -1;
+    while (sp > 0) {
+      const p = stack[--sp];
+      const x = p % w;
+      const y = (p - x) / w;
+      area++;
+      if (x < minx) minx = x;
+      if (x > maxx) maxx = x;
+      if (y < miny) miny = y;
+      if (y > maxy) maxy = y;
+      for (let dy = -1; dy <= 1; dy++) {
+        const ny = y + dy;
+        if (ny < 0 || ny >= h) continue;
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx;
+          if (nx < 0 || nx >= w) continue;
+          const q = ny * w + nx;
+          if (mask[q] && !labels[q]) { labels[q] = next; stack[sp++] = q; }
+        }
+      }
+    }
+    stats[next] = { area, minx, miny, maxx, maxy };
+  }
+  return { labels, stats, count: next };
+}
+
+function sepFilter(src, w, h, k, isMax) {
+  const r = k >> 1;
+  const tmp = new Uint8Array(w * h);
+  const out = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const row = y * w;
+    for (let x = 0; x < w; x++) {
+      let val = isMax ? 0 : 255;
+      for (let d = -r; d <= r; d++) {
+        const xx = x + d < 0 ? 0 : (x + d >= w ? w - 1 : x + d);
+        const p = src[row + xx];
+        if (isMax ? p > val : p < val) val = p;
+      }
+      tmp[row + x] = val;
+    }
+  }
+  for (let x = 0; x < w; x++) {
+    for (let y = 0; y < h; y++) {
+      let val = isMax ? 0 : 255;
+      for (let d = -r; d <= r; d++) {
+        const yy = y + d < 0 ? 0 : (y + d >= h ? h - 1 : y + d);
+        const p = tmp[yy * w + x];
+        if (isMax ? p > val : p < val) val = p;
+      }
+      out[y * w + x] = val;
+    }
+  }
+  return out;
+}
+
+const erode = (m, w, h, k) => sepFilter(m, w, h, k, false);
+const dilate = (m, w, h, k) => sepFilter(m, w, h, k, true);
+const openK = (m, w, h, k) => dilate(erode(m, w, h, k), w, h, k);
+const closeK = (m, w, h, k) => erode(dilate(m, w, h, k), w, h, k);
+
+function removeSmall(mask, w, h, minArea) {
+  const { labels, stats, count } = labelComponents(mask, w, h);
+  const out = new Uint8Array(w * h);
+  if (count === 0) return out;
+  for (let i = 0; i < w * h; i++) {
+    const l = labels[i];
+    if (l && stats[l].area >= minArea) out[i] = 1;
+  }
+  return out;
+}
+
+function fillHoles(mask, w, h) {
+  const n = w * h;
+  const seen = new Uint8Array(n);
+  const stack = new Int32Array(n);
+  let sp = 0;
+  const push = (p) => { if (!mask[p] && !seen[p]) { seen[p] = 1; stack[sp++] = p; } };
+  for (let x = 0; x < w; x++) { push(x); push((h - 1) * w + x); }
+  for (let y = 0; y < h; y++) { push(y * w); push(y * w + w - 1); }
+  while (sp > 0) {
+    const p = stack[--sp];
+    const x = p % w;
+    const y = (p - x) / w;
+    if (x > 0) push(p - 1);
+    if (x < w - 1) push(p + 1);
+    if (y > 0) push(p - w);
+    if (y < h - 1) push(p + w);
+  }
+  const out = new Uint8Array(n);
+  for (let i = 0; i < n; i++) out[i] = (mask[i] || !seen[i]) ? 1 : 0;
+  return out;
+}
+
+function otsu(u8) {
+  const hist = new Int32Array(256);
+  for (let i = 0; i < u8.length; i++) hist[u8[i]]++;
+  const total = u8.length;
+  let sum = 0;
+  for (let t = 0; t < 256; t++) sum += t * hist[t];
+  let sumB = 0, wB = 0, best = -1, thr = 0;
+  for (let t = 0; t < 256; t++) {
+    wB += hist[t];
+    if (wB === 0) continue;
+    const wF = total - wB;
+    if (wF === 0) break;
+    sumB += t * hist[t];
+    const mB = sumB / wB;
+    const mF = (sum - sumB) / wF;
+    const between = wB * wF * (mB - mF) * (mB - mF);
+    if (between > best) { best = between; thr = t; }
+  }
+  return thr;
+}
+
+function cleanMask(mask, w, h, minArea) {
+  let m = openK(mask, w, h, 3);
+  m = closeK(m, w, h, 7);
+  m = removeSmall(m, w, h, minArea);
+  return fillHoles(m, w, h);
+}
+
+/* ---------------- 核心分析 ---------------- */
+function analyze(imageData) {
+  const w = imageData.width;
+  const h = imageData.height;
+  const n = w * h;
+  const data = imageData.data;
+
+  const exg = new Float32Array(n);
+  const Hu = new Uint8Array(n), Sa = new Uint8Array(n), Va = new Uint8Array(n);
+  let lo = Infinity, hi = -Infinity;
+
+  for (let i = 0, p = 0; i < n; i++, p += 4) {
+    const r = data[p], g = data[p + 1], b = data[p + 2];
+    const sum = r + g + b + 1e-6;
+    const e = 2 * (g / sum) - r / sum - b / sum;
+    exg[i] = e;
+    if (e < lo) lo = e;
+    if (e > hi) hi = e;
+
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+    let hh = 0;
+    if (d !== 0) {
+      if (max === r) hh = 60 * (((g - b) / d) % 6);
+      else if (max === g) hh = 60 * ((b - r) / d + 2);
+      else hh = 60 * ((r - g) / d + 4);
+      if (hh < 0) hh += 360;
+    }
+    Hu[i] = Math.round(hh * 179 / 360);
+    Sa[i] = max === 0 ? 0 : Math.round(255 * d / max);
+    Va[i] = max;
+  }
+
+  const range = hi - lo;
+  const exgU8 = new Uint8Array(n);
+  if (range > 1e-6) {
+    const k = 255 / range;
+    for (let i = 0; i < n; i++) exgU8[i] = Math.round((exg[i] - lo) * k);
+  }
+  const thr = otsu(exgU8);
+  const eff = Math.max(0, Math.min(255, Math.round(thr + CFG.exgBias * 255 / 100)));
+
+  const greenRaw = new Uint8Array(n);
+  const yellowRaw = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    if (exgU8[i] <= eff) continue;
+    const hh = Hu[i], ss = Sa[i], vv = Va[i];
+    if (hh >= CFG.hueMin && hh <= CFG.hueMax && ss >= CFG.satMin && vv >= CFG.valMin) greenRaw[i] = 1;
+    else if (hh >= CFG.yellowHueMin && hh < CFG.yellowHueMax && ss >= CFG.yellowSatMin && vv >= CFG.yellowValMin) yellowRaw[i] = 1;
+  }
+
+  const minArea = Math.max(4, CFG.minAreaRatio * n);
+  let greenCore = cleanMask(greenRaw, w, h, minArea);
+  let mask = greenCore.slice();
+
+  let yellowAccepted = 0;
+  if (CFG.acceptYellow && CFG.yellowConnect > 0) {
+    const near = dilate(greenCore, w, h, CFG.yellowConnect | 1);
+    const { labels, stats, count } = labelComponents(yellowRaw, w, h);
+    const keep = new Set();
+    for (let i = 0; i < n; i++) if (near[i] && labels[i] > 0) keep.add(labels[i]);
+    if (keep.size) {
+      for (let i = 0; i < n; i++) {
+        const l = labels[i];
+        if (l > 0 && keep.has(l)) {
+          mask[i] = 1;
+          yellowAccepted++;
+        }
+      }
+    }
+  }
+
+  mask = cleanMask(mask, w, h, minArea);
+  const plantPixels = mask.reduce((a, v) => a + v, 0);
+
+  const greenPx = new Uint8Array(n), yellowPx = new Uint8Array(n), spotPx = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    if (!mask[i]) continue;
+    const hh = Hu[i], ss = Sa[i], vv = Va[i];
+    const isGreen = hh >= CFG.aGreenHueMin && hh <= CFG.aGreenHueMax && ss >= CFG.aGreenSatMin && vv >= CFG.aGreenValMin;
+    if (isGreen) { greenPx[i] = 1; continue; }
+    const isYellow = hh >= CFG.aYellowHueMin && hh < CFG.aYellowHueMax && ss >= CFG.aYellowSatMin && vv >= CFG.aYellowValMin;
+    if (isYellow) { yellowPx[i] = 1; continue; }
+    if (vv <= CFG.spotValMax || exg[i] < 0) spotPx[i] = 1;
+  }
+  const spotClean = openK(spotPx, w, h, 3);
+
+  const lab = labelComponents(mask, w, h);
+  const total = lab.count;
+  const areas = new Int32Array(total + 1);
+  const greens = new Int32Array(total + 1);
+  const yellows = new Int32Array(total + 1);
+  const spots = new Int32Array(total + 1);
+  for (let i = 0; i < n; i++) {
+    const l = lab.labels[i];
+    if (!l) continue;
+    areas[l]++;
+    if (greenPx[i]) greens[l]++;
+    if (yellowPx[i]) yellows[l]++;
+    if (spotClean[i]) spots[l]++;
+  }
+
+  const regions = [];
+  for (let id = 1; id <= total; id++) {
+    const area = areas[id];
+    if (area <= 0) continue;
+    const s = lab.stats[id];
+    const greenRatio = greens[id] / area;
+    const yellowRatio = yellows[id] / area;
+    const spotRatio = spots[id] / area;
+
+    // 区域内的病斑计数：单独把该区域的病斑像素拎出来做连通域统计。
+    // 只有确实存在病斑像素、且区域数不超过 12 个时才细算，避免极端参数下卡顿。
+    let spotCount = 0;
+    if (spots[id] > 0 && total <= 12) {
+      const sub = new Uint8Array(n);
+      for (let i = 0; i < n; i++) if (lab.labels[i] === id && spotClean[i]) sub[i] = 1;
+      const spotBlobs = labelComponents(sub, w, h);
+      const minSpot = Math.max(3, CFG.spotMinAreaRatio * area);
+      for (let k = 1; k <= spotBlobs.count; k++) if (spotBlobs.stats[k].area >= minSpot) spotCount++;
+    }
+
+    const raw = 100 * (greenRatio + 0.5 * yellowRatio + 0.15 * spotRatio);
+    const score = Math.max(0, Math.min(100, Math.round(raw - Math.min(12, spotCount * 0.8))));
+    regions.push({
+      id, area, spotCount, score,
+      x: s.minx, y: s.miny, w: s.maxx - s.minx + 1, h: s.maxy - s.miny + 1,
+      greenRatio, yellowRatio, spotRatio,
+      label: score >= 80 ? "健康" : score >= 60 ? "轻微黄化/亚健康" : score >= 40 ? "明显胁迫" : "疑似病害"
+    });
+  }
+  regions.sort((a, b) => b.area - a.area);
+  regions.forEach((r, i) => { r.rank = i + 1; });
+
+  const notable = regions.filter(r => plantPixels > 0 && r.area / plantPixels >= CFG.notableRatio);
+  let weighted = 0;
+  regions.forEach(r => { weighted += r.score * r.area; });
+  const meanScore = plantPixels > 0 ? Math.round(weighted / plantPixels) : 0;
+
+  const countOf = (arr) => arr.reduce((a, v) => a + v, 0);
+  const greenPixels = countOf(greenPx);
+  const yellowPixels = countOf(yellowPx);
+  const spotPixels = countOf(spotClean);
+
+  return {
+    w, h, plantPixels, regions, labels: lab.labels, mask, spotClean,
+    summary: {
+      coverage: plantPixels / n,
+      regionCount: total,
+      plantCount: notable.length,
+      healthScore: meanScore,
+      overallLabel: plantPixels === 0 ? "未检测到植物"
+        : meanScore >= 80 ? "健康" : meanScore >= 60 ? "轻微黄化/亚健康" : meanScore >= 40 ? "明显胁迫" : "疑似病害",
+      greenRatio: plantPixels ? greenPixels / plantPixels : 0,
+      yellowRatio: plantPixels ? yellowPixels / plantPixels : 0,
+      spotRatio: plantPixels ? spotPixels / plantPixels : 0,
+      totalSpots: regions.reduce((a, r) => a + r.spotCount, 0),
+      threshold: eff
+    },
+    info: {
+      otsu: thr, effective: eff,
+      greenRaw: greenRaw.reduce((a, v) => a + v, 0),
+      yellowRaw: yellowRaw.reduce((a, v) => a + v, 0),
+      yellowAccepted
+    }
+  };
+}
+
+/* ---------------- 绘制 ---------------- */
+function render() {
+  if (!drawState) return;
+  const { imageData, result } = drawState;
+  const w = result.w, h = result.h;
+  view.width = w;
+  view.height = h;
+
+  const base = ctx.createImageData(w, h);
+  base.data.set(imageData.data);
+  if (CFG.maskOnly) {
+    for (let i = 0, p = 0; i < w * h; i++, p += 4) {
+      const v = result.mask[i] ? 255 : 0;
+      base.data[p] = v; base.data[p + 1] = v; base.data[p + 2] = v; base.data[p + 3] = 255;
+    }
+    ctx.putImageData(base, 0, 0);
+  } else {
+    ctx.putImageData(base, 0, 0);
+    if (CFG.showMask) {
+      const layer = ctx.createImageData(w, h);
+      for (let i = 0, p = 0; i < w * h; i++, p += 4) {
+        if (result.mask[i]) { layer.data[p] = 70; layer.data[p + 1] = 210; layer.data[p + 2] = 60; layer.data[p + 3] = 255; }
+        if (result.spotClean[i]) { layer.data[p] = 235; layer.data[p + 1] = 40; layer.data[p + 2] = 40; layer.data[p + 3] = 255; }
+      }
+      const off = document.createElement("canvas");
+      off.width = w; off.height = h;
+      off.getContext("2d").putImageData(layer, 0, 0);
+      ctx.globalAlpha = CFG.alpha;
+      ctx.drawImage(off, 0, 0);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  if (CFG.showBoxes) {
+    const font = Math.max(12, Math.round(w / 60));
+    ctx.lineWidth = Math.max(2, Math.round(w / 400));
+    ctx.font = font + "px 'Microsoft YaHei', sans-serif";
+    ctx.textBaseline = "top";
+    for (const r of result.regions) {
+      ctx.strokeStyle = "#3fd2ff";
+      ctx.strokeRect(r.x, r.y, r.w, r.h);
+      const text = "#" + r.rank + " " + r.label + " " + r.score;
+      const tw = ctx.measureText(text).width;
+      const ty = Math.max(r.y - font - 6, 0);
+      ctx.fillStyle = "rgba(20,20,20,.82)";
+      ctx.fillRect(r.x, ty, tw + 10, font + 6);
+      ctx.fillStyle = "#fff";
+      ctx.fillText(text, r.x + 5, ty + 3);
+    }
+  }
+}
+
+/* ---------------- 界面更新 ---------------- */
+function tagClass(score) { return score >= 80 ? "ok" : score >= 60 ? "warn" : "bad"; }
+
+function updatePanel(result) {
+  const s = result.summary;
+  document.getElementById("s-coverage").textContent = (s.coverage * 100).toFixed(1) + "%";
+  document.getElementById("s-count").textContent = s.plantCount;
+  document.getElementById("s-health").textContent = s.healthScore;
+  document.getElementById("s-spots").textContent = s.totalSpots;
+  document.getElementById("s-yellow").textContent = (s.yellowRatio * 100).toFixed(1) + "%";
+  document.getElementById("s-regions").textContent = s.regionCount;
+  document.getElementById("s-verdict").textContent =
+    s.coverage === 0 ? "判定：" + s.overallLabel
+      : "判定：" + s.overallLabel + " | 健康绿 " + (s.greenRatio * 100).toFixed(1) +
+        "% · 黄化 " + (s.yellowRatio * 100).toFixed(1) + "% · 病斑/坏死 " + (s.spotRatio * 100).toFixed(1) + "%";
+
+  const tbody = document.querySelector("#regions tbody");
+  tbody.innerHTML = "";
+  if (!result.regions.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="color:var(--muted)">未检测到植物区域</td></tr>';
+    return;
+  }
+  for (const r of result.regions.slice(0, 10)) {
+    const tr = document.createElement("tr");
+    tr.innerHTML =
+      "<td>#" + r.rank + "</td>" +
+      "<td>" + r.x + "," + r.y + "</td>" +
+      "<td>" + (r.area / result.plantPixels * 100).toFixed(1) + "%</td>" +
+      "<td>" + (r.greenRatio * 100).toFixed(1) + "%</td>" +
+      "<td>" + (r.yellowRatio * 100).toFixed(1) + "%</td>" +
+      "<td>" + r.spotCount + "</td>" +
+      "<td>" + r.score + "</td>" +
+      '<td><span class="tag ' + tagClass(r.score) + '">' + r.label + "</span></td>";
+    tbody.appendChild(tr);
+  }
+}
+
+function runAnalysis(keepTransform) {
+  if (!sourceImage) return;
+  const t0 = performance.now();
+  const result = analyze(sourceImage);
+  const ms = performance.now() - t0;
+  drawState = { imageData: sourceImage, result };
+  render();
+  updatePanel(result);
+  document.getElementById("timing").textContent =
+    "分析用时 " + ms.toFixed(0) + " ms · Otsu 阈值 " + result.info.effective +
+    " · 黄叶接纳 " + result.info.yellowAccepted + " 像素";
+  if (drop) { drop.hidden = true; }
+  view.hidden = false;
+}
+
+/* ---------------- 示例图片（程序生成） ---------------- */
+function makeCanvas(w, h) {
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  return c;
+}
+
+function drawSoil(g, w, h) {
+  g.fillStyle = "hsl(26, 26%, 34%)";
+  g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 5200; i++) {
+    const x = Math.random() * w, y = Math.random() * h, r = Math.random() * 9 + 2;
+    const l = 26 + Math.random() * 22;
+    g.fillStyle = "hsla(28, " + (16 + Math.random() * 20).toFixed(0) + "%, " + l.toFixed(0) + "%, .5)";
+    g.beginPath(); g.arc(x, y, r, 0, 6.2832); g.fill();
+  }
+  for (let i = 0; i < 26; i++) {
+    const x = Math.random() * w, y = Math.random() * h, r = Math.random() * 5 + 2;
+    g.fillStyle = "hsl(40, 6%, " + (48 + Math.random() * 30).toFixed(0) + "%)";
+    g.beginPath(); g.arc(x, y, r, 0, 6.2832); g.fill();
+  }
+  const grad = g.createRadialGradient(w / 2, h / 2, h * 0.2, w / 2, h / 2, h * 0.85);
+  grad.addColorStop(0, "rgba(0,0,0,0)");
+  grad.addColorStop(1, "rgba(0,0,0,.45)");
+  g.fillStyle = grad;
+  g.fillRect(0, 0, w, h);
+}
+
+function drawLeaf(g, x, y, len, wid, angle, hue, sat, light, spots) {
+  g.save();
+  g.translate(x, y);
+  g.rotate(angle);
+  g.beginPath();
+  g.moveTo(0, 0);
+  g.quadraticCurveTo(len * 0.32, -wid * 0.55, len, -wid * 0.05);
+  g.quadraticCurveTo(len * 0.74, wid * 0.36, len, wid * 0.05);
+  g.quadraticCurveTo(len * 0.32, wid * 0.55, 0, 0);
+  g.closePath();
+  g.fillStyle = "hsl(" + hue + "," + sat + "%," + light + "%)";
+  g.fill();
+  g.lineWidth = Math.max(1.5, wid * 0.07);
+  g.strokeStyle = "hsla(" + hue + "," + sat + "%," + Math.max(8, light - 16) + "%,.85)";
+  g.beginPath(); g.moveTo(0, 0); g.lineTo(len * 0.96, 0); g.stroke();
+  g.restore();
+
+  if (spots > 0) {
+    for (let i = 0; i < spots; i++) {
+      const t = 0.18 + Math.random() * 0.72;
+      const off = (Math.random() - 0.5) * wid * 0.5;
+      const px = x + Math.cos(angle) * len * t - Math.sin(angle) * off;
+      const py = y + Math.sin(angle) * len * t + Math.cos(angle) * off;
+      const r = 3 + Math.random() * 6;
+      g.fillStyle = "hsl(20, 75%, " + (14 + Math.random() * 6).toFixed(0) + "%)";
+      g.beginPath(); g.ellipse(px, py, r, r * 0.8, Math.random() * 3, 0, 6.2832); g.fill();
+    }
+  }
+}
+
+function drawPlant(g, baseX, baseY, scale, leafCount, opts) {
+  opts = opts || {};
+  const yellowLeaves = opts.yellowLeaves || 0;
+  const spots = opts.spots || 0;
+  const stemTop = baseY - scale * 0.85;
+  g.strokeStyle = "hsl(70,40%,32%)";
+  g.lineWidth = Math.max(2, scale * 0.035);
+  g.beginPath(); g.moveTo(baseX, baseY); g.lineTo(baseX, stemTop); g.stroke();
+
+  for (let i = 0; i < leafCount; i++) {
+    const frac = (i + 0.6) / (leafCount + 0.4);
+    const cy = baseY - (baseY - stemTop) * frac;
+    const dir = i % 2 === 0 ? 1 : -1;
+    const len = scale * (0.78 + Math.random() * 0.26) * (1 - 0.35 * frac);
+    const wid = len * (0.42 + Math.random() * 0.14);
+    const pitch = (38 + Math.random() * 24) * Math.PI / 180;
+    const angle = dir > 0 ? -pitch : Math.PI + pitch;
+    const isYellow = i < yellowLeaves;
+    const hue = isYellow ? 46 + Math.random() * 4 : 105 + Math.random() * 14;
+    const sat = isYellow ? 82 + Math.random() * 12 : 42 + Math.random() * 10;
+    const light = isYellow ? 52 + Math.random() * 6 : 40 + Math.random() * 7;
+    drawLeaf(g, baseX, cy, len, wid, angle, hue.toFixed(0), sat.toFixed(0), light.toFixed(0), spots);
+  }
+}
+
+function buildSample(kind) {
+  const w = 720, h = 540;
+  const c = makeCanvas(w, h);
+  const g = c.getContext("2d");
+  drawSoil(g, w, h);
+
+  if (kind === "healthy") {
+    drawPlant(g, w * 0.5, h * 0.9, 300, 7, {});
+  } else if (kind === "seedlings") {
+    [95, 270, 445, 620].forEach((x, i) => {
+      drawPlant(g, x, 460 + (i % 2) * 32, 105 + Math.random() * 18, 5, {});
+    });
+  } else if (kind === "disease") {
+    drawPlant(g, w * 0.5, h * 0.92, 300, 7, { yellowLeaves: 3, spots: 4 });
+  } else {
+    g.strokeStyle = "hsl(28,26%,36%)";
+    g.lineWidth = 9;
+    g.beginPath(); g.moveTo(180, 420); g.lineTo(560, 150); g.stroke();
+    g.lineWidth = 6;
+    g.beginPath(); g.moveTo(380, 280); g.lineTo(470, 240); g.stroke();
+  }
+  return c;
+}
+
+function loadSample(kind) {
+  const c = buildSample(kind);
+  sourceImage = c.getContext("2d").getImageData(0, 0, c.width, c.height);
+  runAnalysis();
+}
+
+/* ---------------- 图片载入 ---------------- */
+function loadFile(file) {
+  if (!file || !file.type.startsWith("image/")) return;
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    const maxSide = 900;
+    const k = Math.min(1, maxSide / Math.max(img.width, img.height));
+    const w = Math.max(1, Math.round(img.width * k));
+    const h = Math.max(1, Math.round(img.height * k));
+    const c = makeCanvas(w, h);
+    const g = c.getContext("2d", { willReadFrequently: true });
+    g.drawImage(img, 0, 0, w, h);
+    sourceImage = g.getImageData(0, 0, w, h);
+    URL.revokeObjectURL(url);
+    runAnalysis();
+  };
+  img.src = url;
+}
+
+/* ---------------- 事件绑定 ---------------- */
+const fileInput = document.createElement("input");
+fileInput.type = "file";
+fileInput.accept = "image/*";
+fileInput.onchange = () => loadFile(fileInput.files[0]);
+
+drop.addEventListener("click", () => fileInput.click());
+["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => {
+  e.preventDefault(); drop.classList.add("hot");
+}));
+["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => {
+  e.preventDefault(); drop.classList.remove("hot");
+}));
+drop.addEventListener("drop", e => {
+  if (e.dataTransfer.files.length) loadFile(e.dataTransfer.files[0]);
+});
+window.addEventListener("paste", e => {
+  const items = e.clipboardData.items;
+  for (const it of items) if (it.type.startsWith("image/")) loadFile(it.getAsFile());
+});
+
+document.getElementById("btn-sample").onclick = () => loadSample("healthy");
+document.getElementById("btn-seedlings").onclick = () => loadSample("seedlings");
+document.getElementById("btn-disease").onclick = () => loadSample("disease");
+document.getElementById("btn-empty").onclick = () => loadSample("empty");
+
+document.getElementById("btn-save").onclick = () => {
+  if (!drawState) return;
+  const a = document.createElement("a");
+  a.download = "plant-detection-result.png";
+  a.href = view.toDataURL("image/png");
+  a.click();
+};
+
+function bindSlider(id, apply) {
+  const el = document.getElementById(id);
+  el.addEventListener("input", () => {
+    apply(Number(el.value));
+    runAnalysis();
+  });
+}
+
+bindSlider("hue-min", v => { CFG.hueMin = v; document.getElementById("v-hue-min").textContent = v; });
+bindSlider("hue-max", v => { CFG.hueMax = v; document.getElementById("v-hue-max").textContent = v; });
+bindSlider("sat-min", v => { CFG.satMin = v; document.getElementById("v-sat-min").textContent = v; });
+bindSlider("val-min", v => { CFG.valMin = v; document.getElementById("v-val-min").textContent = v; });
+bindSlider("exg-bias", v => { CFG.exgBias = v; document.getElementById("v-exg-bias").textContent = v; });
+bindSlider("min-area", v => {
+  CFG.minAreaRatio = v / 10000;
+  document.getElementById("v-min-area").textContent = (v / 100).toFixed(2) + "%";
+});
+
+document.getElementById("show-mask").onchange = e => { CFG.showMask = e.target.checked; render(); };
+document.getElementById("show-boxes").onchange = e => { CFG.showBoxes = e.target.checked; render(); };
+document.getElementById("mask-only").onchange = e => { CFG.maskOnly = e.target.checked; render(); };
+document.getElementById("accept-yellow").onchange = e => { CFG.acceptYellow = e.target.checked; runAnalysis(); };
+
+loadSample("healthy");
+</script>
+</body>
+</html>

@@ -1,0 +1,88 @@
+{
+  "name": "01_healthy_plant",
+  "image_size": {
+    "width": 720,
+    "height": 540
+  },
+  "segment_config": {
+    "hue_min": 25,
+    "hue_max": 95,
+    "sat_min": 40,
+    "val_min": 30,
+    "yellow_hue_min": 12,
+    "yellow_hue_max": 25,
+    "yellow_sat_min": 60,
+    "yellow_val_min": 60,
+    "yellow_connect_px": 15,
+    "exg_bias": 0.0,
+    "open_ksize": 3,
+    "close_ksize": 7,
+    "min_area_ratio": 0.0005,
+    "fill_holes": true
+  },
+  "analyze_config": {
+    "green_hue_min": 30,
+    "green_hue_max": 95,
+    "green_sat_min": 50,
+    "green_val_min": 40,
+    "yellow_hue_min": 12,
+    "yellow_hue_max": 30,
+    "yellow_sat_min": 60,
+    "yellow_val_min": 80,
+    "spot_val_max": 110,
+    "spot_min_area_ratio": 0.0004,
+    "notable_region_ratio": 0.02,
+    "healthy_score": 80,
+    "mild_score": 60,
+    "stress_score": 40
+  },
+  "segment_info": {
+    "exg_otsu_threshold": 127,
+    "exg_effective_threshold": 127,
+    "green_pixels": 97307,
+    "yellow_pixels": 0,
+    "yellow_accepted_pixels": 0,
+    "yellow_rejected_pixels": 0,
+    "mask_pixels": 100656
+  },
+  "summary": {
+    "plant_pixels": 100656,
+    "coverage_ratio": 0.2589,
+    "region_count": 1,
+    "notable_region_count": 1,
+    "estimated_plant_count": 1,
+    "largest_region_ratio": 1.0,
+    "mean_health_score": 98,
+    "overall_label": "健康",
+    "health_distribution": {
+      "健康": 1
+    },
+    "green_ratio": 0.9619,
+    "yellow_ratio": 0.0344,
+    "spot_ratio": 0.0001,
+    "total_spot_count": 0
+  },
+  "regions": [
+    {
+      "index": 1,
+      "x": 121,
+      "y": 153,
+      "w": 479,
+      "h": 327,
+      "area": 100656,
+      "area_ratio": 1.0,
+      "coverage_ratio": 0.2588888888888889,
+      "green_ratio": 0.9619,
+      "yellow_ratio": 0.0344,
+      "spot_ratio": 0.0001,
+      "spot_count": 0,
+      "mean_exg": 0.4721,
+      "health_score": 98,
+      "label": "健康"
+    }
+  ],
+  "outputs": {
+    "annotated": "C:\\Users\\zzd08\\Documents\\Codex\\2026-09-26\\ba\\outputs\\plant-detector\\results\\01_healthy_plant_detected.png",
+    "mask": "C:\\Users\\zzd08\\Documents\\Codex\\2026-09-26\\ba\\outputs\\plant-detector\\results\\01_healthy_plant_mask.png"
+  }
+}
