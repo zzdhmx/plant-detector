@@ -1,0 +1,42 @@
+name: 部署网页演示到 GitHub Pages
+
+# 只发布 webdemo/ 这个目录：GitHub Pages 自带的"从分支根目录发布"取不到子目录，
+# 所以这里用 Actions 把 webdemo/ 作为站点根目录发布出去。
+on:
+  push:
+    branches: [main]
+    paths:
+      - "webdemo/**"
+      - ".github/workflows/deploy-pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 配置 Pages
+        uses: actions/configure-pages@v5
+
+      - name: 打包 webdemo 目录
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: webdemo
+
+      - name: 发布
+        id: deployment
+        uses: actions/deploy-pages@v4
