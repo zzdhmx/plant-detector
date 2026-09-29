@@ -1,5 +1,7 @@
 # 植物检测小项目（PlantDet）
 
+> **在线演示：<https://zzdhmx.github.io/plant-detector/>** —— 打开就能用，不需要安装任何东西。
+
 一个**不需要训练模型、不需要下载权重**的植物检测项目：给它一张照片，它会告诉你画面里
 有没有植物、大概有几株、长得好不好。
 
@@ -50,12 +52,16 @@ python -m plantdet -i 某个文件夹 -o results        # 批量处理
 python -m plantdet -i 图片.jpg --val-min 20 --sat-min 30 --yellow-connect 20
 ```
 
-## 二、网页版演示（免安装）
+## 二、网页版演示（在线 / 离线都能用）
 
-双击打开 `webdemo/index.html` 即可。它把同一套算法用 JavaScript 重写了一遍，
-可以拖拽上传自己的照片、实时拖动滑块调参、直接看掩膜和每个区域的指标，图片全程不离开本机。
+**在线地址：<https://zzdhmx.github.io/plant-detector/>**（每次改动 `webdemo/` 后由
+GitHub Actions 自动重新发布）。它把同一套算法用 JavaScript 重写了一遍，
+可以导入自己的照片、实时拖动滑块调参、直接看掩膜和每个区域的指标，图片全程在浏览器里处理、不会上传。
 
-- 点击「载入示例」可以看四种典型场景；也支持把截图直接粘贴进去。
+离线也能用：直接双击仓库里的 `webdemo/index.html`。
+
+- 导入自己的照片有三种方式：点「导入我的照片」、把照片拖到画面上、或者复制后按 `Ctrl+V` 粘贴。
+- 点击「载入示例」可以看四种典型场景。
 - 想快速判断"是分割不对还是照片本身有问题"时，勾选「只看掩膜」最直观。
 
 ## 三、项目结构
@@ -71,6 +77,7 @@ plant-detector/
 │   └── cli.py                命令行入口
 ├── scripts/make_demo_images.py   合成示例图片（没有照片也能跑）
 ├── webdemo/index.html            纯前端演示版
+├── .github/workflows/deploy-pages.yml   把 webdemo/ 自动发布到 GitHub Pages
 ├── run_demo.py                   一键演示脚本
 ├── samples/                      示例图片
 └── results/                      检测结果
