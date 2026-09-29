@@ -70,7 +70,24 @@
     transition: .15s;
   }
   #drop.hot { border-color: var(--green); color: var(--green); background: #14231a; }
+  .canvas-wrap.dragging::after {
+    content: "松开即可导入这张照片";
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(12, 26, 18, .78);
+    border: 2px dashed var(--green);
+    border-radius: 12px;
+    color: var(--green);
+    font-size: 16px;
+    pointer-events: none;
+  }
+  .hint { color: var(--muted); font-size: 12px; margin: 0; }
+  .hint b { color: #cfe6d6; font-weight: 600; }
   .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .row .hint { flex: 1 1 100%; }
   button {
     background: var(--card2);
     color: var(--text);
@@ -119,17 +136,26 @@
 
 <main>
   <section class="stage">
-    <div class="card canvas-wrap">
-      <div id="drop">拖拽一张植物照片到这里<br /><small>或点击选择本地图片</small></div>
+    <div class="card canvas-wrap" id="stage">
       <canvas id="view" hidden></canvas>
+      <div id="drop">
+        拖拽一张植物照片到这里<br />
+        <small>或点击选择本地图片（也可以直接 Ctrl+V 粘贴）</small>
+      </div>
     </div>
     <div class="card row">
-      <button id="btn-sample" class="primary">载入示例：健康植株</button>
+      <button id="btn-import" class="primary">导入我的照片</button>
+      <button id="btn-sample">示例：健康植株</button>
       <button id="btn-seedlings">示例：多株幼苗</button>
       <button id="btn-disease">示例：病害植株</button>
       <button id="btn-empty">示例：无植物</button>
       <button id="btn-save">保存结果图</button>
       <span id="timing" style="color:var(--muted);font-size:12px"></span>
+      <p class="hint">
+        支持 <b>JPG / PNG / WebP / BMP</b>：点击「导入我的照片」、把照片拖到上面的画面上，
+        或者复制照片后在本页按 <b>Ctrl+V</b> 都能导入。照片只在你的浏览器里处理，不会上传；
+        大图会自动缩到最长边 900 像素，导入后可再用左侧滑块微调分割效果。
+      </p>
     </div>
     <div class="card">
       <h2>区域明细</h2>
@@ -762,18 +788,42 @@ function loadFile(file) {
 const fileInput = document.createElement("input");
 fileInput.type = "file";
 fileInput.accept = "image/*";
-fileInput.onchange = () => loadFile(fileInput.files[0]);
+fileInput.onchange = () => {
+  if (fileInput.files.length) loadFile(fileInput.files[0]);
+  fileInput.value = "";   // 清空，保证再次选同一张图也能触发
+};
 
-drop.addEventListener("click", () => fileInput.click());
-["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => {
-  e.preventDefault(); drop.classList.add("hot");
-}));
-["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => {
-  e.preventDefault(); drop.classList.remove("hot");
-}));
-drop.addEventListener("drop", e => {
-  if (e.dataTransfer.files.length) loadFile(e.dataTransfer.files[0]);
+const stage = document.getElementById("stage");
+
+function openPicker() { fileInput.click(); }
+document.getElementById("btn-import").onclick = openPicker;
+drop.addEventListener("click", openPicker);
+
+// 拖拽目标覆盖整个画面区域：即使已经载入了照片，也能直接把新照片拖进来替换
+let dragDepth = 0;
+stage.addEventListener("dragenter", e => {
+  e.preventDefault();
+  dragDepth++;
+  stage.classList.add("dragging");
 });
+stage.addEventListener("dragover", e => {
+  e.preventDefault();
+  if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+});
+stage.addEventListener("dragleave", () => {
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (dragDepth === 0) stage.classList.remove("dragging");
+});
+stage.addEventListener("drop", e => {
+  e.preventDefault();
+  dragDepth = 0;
+  stage.classList.remove("dragging");
+  const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (file) loadFile(file);
+});
+// 拖到页面其它地方时不要打开图片、也不要把页面跳走
+["dragover", "drop"].forEach(ev => window.addEventListener(ev, e => e.preventDefault()));
+
 window.addEventListener("paste", e => {
   const items = e.clipboardData.items;
   for (const it of items) if (it.type.startsWith("image/")) loadFile(it.getAsFile());
